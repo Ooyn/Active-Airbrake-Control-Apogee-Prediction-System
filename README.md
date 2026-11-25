@@ -1,39 +1,47 @@
-# Active-Airbrake-Control-Apogee-Prediction-System
-Overview
+# Active Airbrake Control & Apogee Prediction System
 
-This repository contains a closed-loop 1-Degree of Freedom (1-DOF) flight simulation and control system built in MATLAB/Simulink. It is designed to model the coast phase of a high-power rocket and autonomously control aerodynamic drag (airbrakes) to hit a precise target apogee of 10,000 ft (3048m).
+MATLAB/Simulink flight dynamics and control simulation targeting a **10,000 ft (3,048 m)** apogee for a sounding rocket during the unpowered coast phase. The model combines a 1-DOF vertical flight physics plant, a COESA atmosphere model, Mach-dependent drag lookup tables derived from OpenRocket data, real-time apogee prediction, and closed-loop airbrake control.
 
-Rather than relying on a pre-calculated reference trajectory, the flight computer utilizes a real-time apogee predictor based on the closed-form drag equation. It continuously calculates the vehicle's kinetic energy, predicts the final altitude, and commands the airbrake servos via a tuned PID controller to minimize apogee error.
-Key Features
+![Simulink Architecture](docs/simulink_architecture.png)
 
-    Real-Time Apogee Prediction: Implements the closed-form kinematic drag equation (Altitude+k2​⋅ln(1+k1​⋅Velocity2)) to dynamically predict the rocket's final altitude at any given millisecond, accounting for air density and shifting drag coefficients.
+---
 
-    Dynamic Aerodynamic Plant: Replaces static drag approximations with 1-D Lookup Tables populated by OpenRocket Component Analysis wind-tunnel data. The physics engine interpolates between "Clean Cd​" and "Max Cd​" states based on the active brake deployment percentage.
+## System Overview
 
-    Altitude-Conditioned Deployment: Includes a hard-coded safety threshold that locks airbrakes at 0% deployment during the high-velocity lower atmosphere coast, safely handing over control to the PID loop only after crossing 2000 meters.
+| Subsystem | Implementation Details |
+| :--- | :--- |
+| **Target Apogee** | 10,000 ft (3,048 m), past a 2,000 m safety threshold |
+| **Flight Regime** | Coast phase (motor burnout to apogee), constant dry mass ($m_{\text{dry}}$) |
+| **Equations of Motion** | 1-DOF vertical dynamics: $a(t) = \frac{-m_{\text{dry}} g - F_{\text{drag}}}{m_{\text{dry}}}$ |
+| **Atmosphere Model** | COESA atmosphere for altitude-dependent air density ($\rho$) and speed of sound |
+| **Aerodynamic Drag** | $F_{\text{drag}} = \frac{1}{2}\rho(h)\,v^2\,C_d(M, \alpha)\,A_{\text{ref}}$ using OpenRocket Mach lookup data |
+| **Control & Actuation** | Closed-loop control / PID & PD law with saturation and servo dynamics modeling |
+| **Sensor & Hardware Realism** | Measurement noise filtering, low-pass conditioning, and actuator rate/position limits |
 
-    Actuator Saturation Protection: Actuator commands are clamped between 0.0 (0%) and 1.0 (100%) to perfectly mimic physical servo limits and prevent mathematical integrator windup.
+---
 
-System Architecture
+## Architecture & Modeling Workflow
 
-The Simulink model is divided into two primary subsystems:
+1. **1-DOF Physics Plant & Atmosphere:**
+   - Integrates net vertical acceleration ($F_{\text{net}} = -F_{\text{gravity}} - F_{\text{drag}}$) from burnout initial conditions to obtain velocity and altitude.
+   - Uses COESA atmospheric properties and OpenRocket drag data across Mach regimes to capture drag rise accurately rather than relying on sea-level constants.
+2. **Apogee Prediction & Control Law:**
+   - Evaluates real-time apogee projection and compares current state/trajectory error to command airbrake deployment ($0\% \to 100\%$) while respecting actuator limits and safety bounds.
+3. **Noise & Actuator Realism:**
+   - Incorporates sensor noise, filtering, and actuation limits/lag so control behavior can be evaluated under realistic flight conditions.
 
-    The Physics Plant: Takes the brake command (u) from the controller, calculates the blended drag coefficient, computes dynamic pressure and total drag force, and integrates acceleration to output true real-time Velocity and Altitude state variables.
+---
 
-    The Flight Controller: Reads the simulated sensor data. The Apogee Predictor calculates the estimated apogee, subtracts the 3048m target to find the error, and feeds it into a tuned PID controller. The control effort is bounded and passed through the 2000m logic switch before commanding the plant.
+## Repository Contents
 
-Prerequisites
+- `simulink/AirbrakesPhysics.slx` — Simulink flight dynamics and control model.
+- `data/` — OpenRocket aerodynamic lookup and reference flight trajectory datasets.
+- `scripts/` — MATLAB setup and post-processing scripts.
+- `docs/` — Architecture diagrams and simulation plots.
 
-    MATLAB & Simulink
+---
 
-    OpenRocket (to generate custom Cd​ vs. Mach lookup tables for your specific airframe)
+## Validation & Verification
 
-Tuning and Configuration
-
-To adapt this model for a different rocket, users must update:
-
-    The Initial Conditions in the Integrator blocks (Burnout Velocity and Burnout Altitude).
-
-    The 1-D Lookup Tables with specific Mach vs. Cd​ arrays.
-
-    The k1​ and k2​ ballistic constants in the Apogee Predictor, calculated using the vehicle's specific mass, reference area, and average active-control air density.
+- **Baseline Plant Check:** Verified unactuated coast behavior against OpenRocket trajectory outputs to confirm mass, reference area, atmospheric density, and drag curves align.
+- **Closed-Loop & Stress Checks:** Tested apogee targeting accuracy and controller stability under sensor noise, filtering, and actuator constraints.
